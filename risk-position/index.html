@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>通用币种风险定仓计算器</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17191c;background:#fff;font-synthesis:none}
+*{box-sizing:border-box}
+body{margin:0;padding:14px}
+main{max-width:720px;margin:0 auto;padding:16px;border:1px solid #e9eaed;border-radius:16px;background:#fff}
+h1{font-size:20px;letter-spacing:-.4px;margin:0}
+.info{font-size:12px;color:#69717c;line-height:1.65;margin:6px 0 20px}
+.flex{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{min-width:0}
+.field label{display:block;font-size:12px;color:#62666d;font-weight:600;margin-bottom:7px}
+input{width:100%;font:inherit;font-size:16px;padding:11px;border:1px solid #dcdee2;border-radius:10px;outline:none;background:white;color:#16181b;min-height:43px}
+input:focus{border-color:#36383c;box-shadow:0 0 0 2px #efeff1}
+input::placeholder{color:#a1a6ac}
+.segment{display:grid;grid-template-columns:1fr 1fr;background:#f2f3f5;border-radius:11px;padding:4px;gap:4px;margin:15px 0}
+.segment label{position:relative;cursor:pointer}
+.segment input{position:absolute;opacity:0;width:1px;height:1px}
+.segment span{display:block;text-align:center;padding:9px;border-radius:8px;font-size:14px}
+.segment input:checked+span{background:#191b1f;color:#fff}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.box{margin-top:18px;background:#f5f6f7;border:1px solid #ebedf0;border-radius:14px;padding:20px 14px;text-align:center}
+.box small{font-size:12px;color:#676c74}
+.big{font-size:clamp(27px,6vw,41px);font-weight:760;overflow-wrap:anywhere;letter-spacing:-.5px;margin:8px 0 0;font-variant-numeric:tabular-nums}
+.base{font-size:13px;color:#666b74;margin-top:2px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.stat{border:1px solid #eceef0;border-radius:12px;padding:13px 11px;min-width:0}
+.stat small{display:block;color:#757a82;font-size:12px;margin-bottom:7px}
+.stat strong{display:block;overflow-wrap:anywhere;font-size:16px}
+.foot{color:#6e737b;font-size:12px;line-height:1.65;margin:15px 0 0}
+.error{display:none;color:#a52a2a;background:#fff2f2;border:1px solid #f0cccc;border-radius:10px;font-size:13px;padding:12px;margin-top:14px}
+footer{display:flex;justify-content:flex-end;margin-top:15px}
+button{border:1px solid #dcdfe3;background:#fff;border-radius:9px;padding:9px 15px;font-weight:600;color:#454a50;cursor:pointer}
+@media(max-width:450px){body{padding:5px}main{border-radius:12px;padding:14px}.flex,.fields{gap:9px}.stat{padding:12px 9px}.stat strong{font-size:14px}h1{font-size:18px}}
+</style></head>
+<body><main>
+<h1>市场止损 · 风险定仓</h1>
+<p class="info">由市场确定技术止损价，再按单笔风险预算计算合适仓位。支持任意币种和线性合约计价货币。</p>
+<div class="flex">
+<div class="field"><label for="base">交易币种</label><input id="base" value="SOL" placeholder="如 BTC、ETH、SOL" maxlength="30"></div>
+<div class="field"><label for="quote">计价货币</label><input id="quote" value="USDT" placeholder="如 USDT、USDC" maxlength="20"></div>
+</div>
+<div class="segment" role="group" aria-label="交易方向">
+<label><input type="radio" name="side" value="long" checked><span>做多 Long</span></label>
+<label><input type="radio" name="side" value="short"><span>做空 Short</span></label>
+</div>
+<div class="fields">
+<div class="field"><label for="entry">计划开仓价格</label><input id="entry" type="number" inputmode="decimal" min="0" step="any" value="150"></div>
+<div class="field"><label for="stop">市场技术止损价</label><input id="stop" type="number" inputmode="decimal" min="0" step="any" value="145"></div>
+<div class="field"><label for="risk">最大允许亏损（计价币）</label><input id="risk" type="number" inputmode="decimal" min="0" step="any" value="10"></div>
+<div class="field"><label for="leverage">设置杠杆（倍）</label><input id="leverage" type="number" inputmode="decimal" min="0" step="any" value="5"></div>
+</div>
+<div class="error" id="error" role="alert"></div>
+<div id="result">
+<div class="box"><small>理论最大持仓数量</small><div class="big" id="qty">—</div><div class="base" id="unit">SOL</div></div>
+<div class="stats">
+<div class="stat"><small>仓位名义价值</small><strong id="notional">—</strong></div>
+<div class="stat"><small>预计初始保证金</small><strong id="margin">—</strong></div>
+<div class="stat"><small>技术止损距离</small><strong id="distance">—</strong></div>
+<div class="stat"><small>止损理论亏损</small><strong id="loss">—</strong></div>
+</div>
+</div>
+<footer><button type="button" id="clear">清空数据</button></footer>
+<p class="foot">核心公式：最大持仓数量 = 单笔最大允许亏损 ÷ |开仓价 − 技术止损价|。杠杆仅决定预计保证金，不改变按风险预算计算的持仓数量。</p>
+<p class="foot">仅适用于普通线性合约；价格与风险金额需使用相同计价货币。数字为理论值，不含手续费、滑点、资金费、数量步长和强平影响。实际仓位应向下调整并留出缓冲。不适用于币本位反向合约的直接计算。</p>
+</main>
+<script>
+(function(){
+const ids=["base","quote","entry","stop","risk","leverage"];
+const get=id=>document.getElementById(id);
+const fmt=(n)=>!Number.isFinite(n)?"—":(n!==0&&Math.abs(n)<1e-9?n.toExponential(6):new Intl.NumberFormat("en-US",{maximumSignificantDigits:11}).format(n));
+function recalc(){
+ const base=get("base").value.trim().toUpperCase()||"币",quote=get("quote").value.trim().toUpperCase()||"计价币";
+ const side=document.querySelector('input[name="side"]:checked').value;
+ const p=Number(get("entry").value),s=Number(get("stop").value),r=Number(get("risk").value),l=Number(get("leverage").value);
+ let err="";
+ if(["entry","stop","risk","leverage"].some(x=>get(x).value.trim()==="")||![p,s,r,l].every(Number.isFinite)||p<=0||s<=0||r<=0||l<=0)err="请输入大于 0 的有效价格、亏损预算与杠杆倍数。";
+ else if(side==="long"&&s>=p)err="做多时，技术止损价必须低于开仓价。";
+ else if(side==="short"&&s<=p)err="做空时，技术止损价必须高于开仓价。";
+ get("error").textContent=err;get("error").style.display=err?"block":"none";get("result").style.display=err?"none":"block";
+ if(err)return;
+ const d=Math.abs(p-s),q=r/d,n=q*p,m=n/l;
+ get("qty").textContent=fmt(q);get("unit").textContent=base;
+ get("notional").textContent=fmt(n)+" "+quote;
+ get("margin").textContent=fmt(m)+" "+quote;
+ get("distance").textContent=fmt(d/p*100)+"%";
+ get("loss").textContent=fmt(r)+" "+quote;
+}
+ids.forEach(id=>get(id).addEventListener("input",recalc));
+document.querySelectorAll('input[name="side"]').forEach(x=>x.addEventListener("change",recalc));
+get("clear").addEventListener("click",()=>{ids.forEach(id=>get(id).value="");document.querySelector('input[value="long"]').checked=true;recalc()});
+recalc();
+})();
+</script>
+</body></html>
